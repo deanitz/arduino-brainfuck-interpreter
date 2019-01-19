@@ -1,5 +1,5 @@
 # arduino-brainfuck-interpreter
-Turns Arduino Uno into a [Brainfuck](https://ru.wikipedia.org/wiki/Brainfuck) editor and interpreter, a brainteaser for programmers.
+Turns Arduino Uno into a [Brainfuck](https://wikipedia.org/wiki/Brainfuck) editor and interpreter, a brainteaser for programmers.
 
 Based on this [sketch](https://github.com/Lepeshka92/Arduino-Brainfuck-Machine) with several small fixes and improvements.
 
