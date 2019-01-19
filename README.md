@@ -5,6 +5,6 @@ Based on this [sketch](https://github.com/Lepeshka92/Arduino-Brainfuck-Machine) 
 
 Works well with LCD Keypad Shield, however maybe need to review it's original sketch for other sets of button signal shift.
 
-![Photo1](/photo/1.JPG)
-![Photo2](/photo/2.JPG)
-![Photo3](/photo/3.JPG)
+![Photo1](photo/1.jpg)
+![Photo2](photo/2.jpg)
+![Photo3](photo/3.jpg)
