@@ -5,6 +5,8 @@
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7);
 
 //Constants
+#define DEBUG 1
+
 #define btnRIGHT  0
 #define btnUP     1
 #define btnDOWN   2
@@ -19,11 +21,18 @@ LiquidCrystal lcd(8, 9, 4, 5, 6, 7);
 #define BUTTON_DEBOUNCE 500
 #define LONG_DELAY 3000 
 
+#define MEM_DISPLAY_SIZE 4 
+
 const byte MODE_MENU = 0;
 const byte MODE_EDIT = 1;
 const byte MODE_EXEC = 2;
-const byte MODE_SAVE = 3;
-const byte MODE_LOAD = 4;
+const byte MODE_DBUG = 3;
+const byte MODE_SAVE = 4;
+const byte MODE_LOAD = 5;
+
+const byte DEBUG_MEMORY = 0;
+const byte DEBUG_PROGRAM = 1;
+const byte DEBUG_IO = 2;
 
 byte symbolHeart[8] = {
   B00000,
@@ -47,7 +56,7 @@ byte symbolNone[8] = {
   B00000,
 };
 
-const char* menuItems[4] = {"1. Edit", "2. Execute", "3. Save", "4. Load"};
+const char* menuItems[5] = {"1. Edit", "2. Execute", "3. Step Execute", "4. Save", "5. Load"};
 
 const char ops[] = {'\0', '>', '<', '+', '-', '.', ',', '[', ']'};
 
@@ -66,8 +75,18 @@ char prg[PRG_SIZE] = {0};   //BF program
 short ic;                    //Current position in ops array
 short pc;                   //Current position in prg array
 
+//Debugger
+byte  debugScreen = 0;              // debug screen mode
+short memScreenPos = 0;
+short prgScreenPos = 0;
+
+byte isDebug = 0;
+
 void setup()
 {
+  #ifdef DEBUG
+  Serial.begin(9600);
+  #endif
   startLCD();
 }
  
@@ -87,6 +106,13 @@ void loop()
         }
         case MODE_EXEC:
         {
+          isDebug = 0;
+          processExecution();
+          break;
+        }
+        case MODE_DBUG:
+        {
+          isDebug = 1;
           processExecution();
           break;
         }
@@ -106,9 +132,9 @@ void loop()
 void processMenu()
 {
     lcd.setCursor(0,0);
-    lcd.print("I ");
+    lcd.print(F("I "));
     lcd.write(byte(1));
-    lcd.print(" Brainfuck!");
+    lcd.print(F(" Brainfuck!"));
 
     if(readKeyboard())
     {
@@ -119,14 +145,14 @@ void processMenu()
               menuItem--;
               if (menuItem < 0)
               {
-                menuItem = 3;
+                menuItem = 4;
               }
               break;
             }
             case btnRIGHT:
             {
               menuItem++;
-              if (menuItem > 3)
+              if (menuItem > 4)
               {
                 menuItem = 0;
               }
@@ -228,21 +254,47 @@ int getCommandIndex(char symbol, char defaultIndex)
   return defaultIndex;
 }
 
+
 void processExecution()
 {
   char mem[MEM_SIZE] = {0};     //init memory array
   short stack[STACK_SIZE] = {0};//init stack array
   pc = 0;                       //program position to start
-  short memPos = 0;                 //memory position
-  byte stackPos = 0;                  //stack position 
-  byte cursorPos = 0;                  //cursor position
-  lcdPrintString(1, "");
-  lcd.setCursor(cursorPos, 1);
-  lcd.print(F("Output: "));
-  cursorPos = 8;
+  short memPos = 0;             //memory position
+  byte stackPos = 0;            //stack position 
+  byte cursorPos = 0;           //cursor position
+  char output[2] = {0};
+
+  lcd.clear();
+
+  // if (!isDebug)
+  // {
+  //   lcd.setCursor(cursorPos, 1);
+  //   lcd.print(F("Output: "));
+  //   cursorPos = 8;
+  // }
+  
+  #ifdef DEBUG
+        Serial.print("isDebug ");
+        Serial.println(isDebug);
+  #endif 
   
   while(prg[pc])
   {
+    #ifdef DEBUG
+        Serial.print("step ");
+        Serial.println(pc);
+    #endif 
+    
+    
+    if (isDebug)
+    {
+        processDebug(mem, memPos, pc, output);
+    }
+    else
+    {
+    }
+
     switch(prg[pc])
     {
       case '>':
@@ -292,14 +344,28 @@ void processExecution()
           stackPos--;
         break;
     }
+
+    if (isDebug)
+    {
+    }
+    else
+    {
+    }
+
     pc++;
   }
 
+
+  //Execution completed
+  #ifdef DEBUG
+        Serial.println("Execution completed");
+  #endif 
+  
   mode = 0;
   pc = 0;
   delay(LONG_DELAY);
 
-  bool isWaiting = true;
+  byte isWaiting = true;
 
   while (isWaiting)
   {
@@ -310,6 +376,104 @@ void processExecution()
     delay(50);
   }
   lcd.clear();
+}
+
+
+void processDebug(char mem[], short memPos, short pc, char output[])
+{
+  byte isCanStep = 0;
+  while(isCanStep == 0)
+  {
+    switch (debugScreen)
+    {
+      case DEBUG_MEMORY:
+      {
+        isCanStep = processDebugMemory(mem, memPos, pc, output);
+        break;
+      }
+    }
+  }
+
+  isCanStep = 0;
+}
+
+byte processDebugMemory(char mem[], short memPos, short pc, char output[])
+{
+  lcd.setCursor(0,0);
+
+  for (short i = memScreenPos; i <= memScreenPos + (4*MEM_DISPLAY_SIZE); i+=MEM_DISPLAY_SIZE)
+  {
+    #ifdef DEBUG
+        Serial.print("memScreenPos ");
+        Serial.println(memScreenPos);
+    #endif 
+    char buf[3] = {0};
+    sprintf(buf, "%03d", mem[i/MEM_DISPLAY_SIZE]);
+    lcd.print(buf);
+    lcd.print(F(" "));
+  }
+
+  lcd.setCursor(0,1);
+
+  for (short i = memScreenPos; i <= memScreenPos + (4*MEM_DISPLAY_SIZE); i+=MEM_DISPLAY_SIZE)
+  {
+    if (i/MEM_DISPLAY_SIZE == memPos)
+    {
+      lcd.print(F(" ^  "));
+    }
+  }
+
+  byte result = 0;
+
+  if(readKeyboard())
+    {
+      switch(lastButton)
+      {
+          case btnLEFT:
+          {
+            memScreenPos -= MEM_DISPLAY_SIZE;
+            if (memScreenPos <= 0)
+            {
+              memScreenPos = 0;
+            }
+            break;
+          }
+          case btnRIGHT:
+          {
+            memScreenPos += MEM_DISPLAY_SIZE;
+            if (memScreenPos > (MEM_SIZE * MEM_DISPLAY_SIZE) - MEM_DISPLAY_SIZE)
+            {
+              memScreenPos = (MEM_SIZE * MEM_DISPLAY_SIZE) - MEM_DISPLAY_SIZE;
+            }
+            break;
+          }
+          case btnUP:
+          {
+            debugScreen--;
+            if (debugScreen < DEBUG_MEMORY)
+            {
+              debugScreen = DEBUG_IO;
+            }
+            break;
+          }
+          case btnDOWN:
+          {
+            debugScreen++;
+            if (debugScreen > DEBUG_IO)
+            {
+              debugScreen = DEBUG_MEMORY;
+            }
+            break;
+          }
+          case btnSELECT:
+          {
+            result = 1;
+            break;
+          }
+      }
+    }
+
+    return result;
 }
 
 void processSave()
@@ -352,7 +516,7 @@ byte readByteFromKeyboard()
 {
   byte result = 0;
 
-  bool isInput = true;
+  byte isInput = true;
   while(isInput)
   {
     lcd.setCursor(0, 0);
@@ -403,7 +567,7 @@ void startLCD()
   lcd.begin(16, 2);              // start the library
 }
 
-bool readKeyboard()
+byte readKeyboard()
 {
   unsigned long newMillis = millis();
 
@@ -453,7 +617,7 @@ void lcdPrintString(int line, const char str[])
 {
     lcd.setCursor(0, line);
     lcd.print(str);
-    lcd.print("                ");
+    lcd.print(F("                "));
 }
 
 
