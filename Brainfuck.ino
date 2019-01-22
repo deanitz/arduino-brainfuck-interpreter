@@ -14,8 +14,8 @@ LiquidCrystal lcd(8, 9, 4, 5, 6, 7);
 #define btnSELECT 4
 #define btnNONE   5
 
-#define PRG_SIZE 255        //Size of memory for code
-#define MEM_SIZE 255        //Size of memory for memory :-)
+#define PRG_SIZE 128        //Size of memory for code
+#define MEM_SIZE 128        //Size of memory for memory :-)
 #define STACK_SIZE 32       //Size of stack for BF interpreter
 
 #define BUTTON_DEBOUNCE 500
@@ -31,8 +31,8 @@ const byte MODE_SAVE = 4;
 const byte MODE_LOAD = 5;
 
 const byte DEBUG_MEMORY = 0;
-const byte DEBUG_PROGRAM = 1;
-const byte DEBUG_IO = 2;
+const byte DEBUG_CODE = 1;
+const byte DEBUG_OUTPUT = 2;
 
 byte symbolHeart[8] = {
   B00000,
@@ -76,7 +76,7 @@ short ic;                    //Current position in ops array
 short pc;                   //Current position in prg array
 
 //Debugger
-byte  debugScreen = 0;              // debug screen mode
+short  debugScreen = 0;              // debug screen mode
 short memScreenPos = 0;
 short prgScreenPos = 0;
 
@@ -262,37 +262,27 @@ void processExecution()
   pc = 0;                       //program position to start
   short memPos = 0;             //memory position
   byte stackPos = 0;            //stack position 
-  byte cursorPos = 0;           //cursor position
-  char output[2] = {0};
+  byte outputPos = 0;           //output position
+  char output[16] = {0};        //output buffer 1 line
 
   lcd.clear();
-
-  // if (!isDebug)
-  // {
-  //   lcd.setCursor(cursorPos, 1);
-  //   lcd.print(F("Output: "));
-  //   cursorPos = 8;
-  // }
   
   #ifdef DEBUG
-        Serial.print("isDebug ");
+        Serial.print(F("isDebug "));
         Serial.println(isDebug);
   #endif 
   
   while(prg[pc])
   {
     #ifdef DEBUG
-        Serial.print("step ");
+        Serial.print(F("step "));
         Serial.println(pc);
     #endif 
     
     
     if (isDebug)
     {
-        processDebug(mem, memPos, pc, output);
-    }
-    else
-    {
+        processDebug(mem, memPos, pc, output, outputPos);
     }
 
     switch(prg[pc])
@@ -314,8 +304,19 @@ void processExecution()
         break;
  
       case '.':
-        lcd.setCursor(cursorPos, 1);
-        cursorPos += lcd.print(mem[memPos]);
+
+        output[outputPos] = mem[memPos];
+        outputPos++;
+        if (outputPos >= sizeof(output))
+        {
+          outputPos = 0;
+        }
+
+        #ifdef DEBUG
+          Serial.print(F("output: "));
+          Serial.println(output);
+        #endif 
+
         break;
  
       case ',':
@@ -345,18 +346,15 @@ void processExecution()
         break;
     }
 
-    if (isDebug)
-    {
-    }
-    else
-    {
-    }
-
     pc++;
   }
 
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print(F("DONE. Output:"));
+  lcd.setCursor(0, 1);
+  lcd.print(output);
 
-  //Execution completed
   #ifdef DEBUG
         Serial.println("Execution completed");
   #endif 
@@ -375,11 +373,12 @@ void processExecution()
     }
     delay(50);
   }
+
   lcd.clear();
 }
 
 
-void processDebug(char mem[], short memPos, short pc, char output[])
+void processDebug(char mem[], short memPos, short pc, char output[], byte outputPos)
 {
   byte isCanStep = 0;
   while(isCanStep == 0)
@@ -388,7 +387,17 @@ void processDebug(char mem[], short memPos, short pc, char output[])
     {
       case DEBUG_MEMORY:
       {
-        isCanStep = processDebugMemory(mem, memPos, pc, output);
+        isCanStep = processDebugMemory(mem, memPos, pc, output, outputPos);
+        break;
+      }
+      case DEBUG_CODE:
+      {
+        isCanStep = processDebugCode(mem, memPos, pc, output, outputPos);
+        break;
+      }
+      case DEBUG_OUTPUT:
+      {
+        isCanStep = processDebugOutput(mem, memPos, pc, output, outputPos);
         break;
       }
     }
@@ -397,29 +406,173 @@ void processDebug(char mem[], short memPos, short pc, char output[])
   isCanStep = 0;
 }
 
-byte processDebugMemory(char mem[], short memPos, short pc, char output[])
+byte processDebugCode(char mem[], short memPos, short pc, char output[], byte outputPos)
+{
+  lcd.setCursor(0,0);
+
+  #ifdef DEBUG
+      Serial.print(F("prgScreenPos"));
+      Serial.println(prgScreenPos);
+  #endif 
+  for (short i = prgScreenPos; i <= prgScreenPos + 16; i++)
+  {
+    lcd.print(prg[prgScreenPos + i]);
+  }
+
+  lcd.setCursor(0,1);
+  for (short i = 0; i < 16; i++)
+  {
+    short curPrgPos = i + prgScreenPos;
+    if (curPrgPos == pc)
+    {
+      lcd.print(F("^"));
+    }
+    else
+    {
+      lcd.print(F(" "));
+    }
+  }
+
+  byte result = 0;
+
+  if(readKeyboard())
+    {
+      switch(lastButton)
+      {
+          case btnLEFT:
+          {
+            prgScreenPos--;
+            if (prgScreenPos <= 0)
+            {
+              prgScreenPos = 0;
+            }
+            break;
+          }
+          case btnRIGHT:
+          {
+            prgScreenPos++;
+            if (prgScreenPos >= PRG_SIZE)
+            {
+              prgScreenPos = PRG_SIZE - 1;
+            }
+            break;
+          }
+          case btnUP:
+          {
+            debugScreen--;
+            if (debugScreen < DEBUG_MEMORY)
+            {
+              debugScreen = DEBUG_OUTPUT;
+            }
+            break;
+          }
+          case btnDOWN:
+          {
+            debugScreen++;
+            if (debugScreen > DEBUG_OUTPUT)
+            {
+              debugScreen = DEBUG_MEMORY;
+            }
+            break;
+          }
+          case btnSELECT:
+          {
+            result = 1;
+            break;
+          }
+      }
+    }
+
+    return result;
+}
+
+byte processDebugOutput(char mem[], short memPos, short pc, char output[], byte outputPos)
+{
+  lcdPrintString(0,"Output:");
+
+  lcd.setCursor(0,1);
+  for (short i = 0; i < 16; i++)
+  {
+    if (i < outputPos)
+    {
+      lcd.print(output[i]);
+    }
+    else
+    {
+      lcd.print(F(" "));
+    }
+  }
+
+  byte result = 0;
+
+  if(readKeyboard())
+    {
+      switch(lastButton)
+      {
+          case btnLEFT:
+          {
+            break;
+          }
+          case btnRIGHT:
+          {
+            break;
+          }
+          case btnUP:
+          {
+            debugScreen--;
+            if (debugScreen < DEBUG_MEMORY)
+            {
+              debugScreen = DEBUG_OUTPUT;
+            }
+            break;
+          }
+          case btnDOWN:
+          {
+            debugScreen++;
+            if (debugScreen > DEBUG_OUTPUT)
+            {
+              debugScreen = DEBUG_MEMORY;
+            }
+            break;
+          }
+          case btnSELECT:
+          {
+            result = 1;
+            break;
+          }
+      }
+    }
+
+    return result;
+}
+
+byte processDebugMemory(char mem[], short memPos, short pc, char output[], byte outputPos)
 {
   lcd.setCursor(0,0);
 
   for (short i = memScreenPos; i <= memScreenPos + (4*MEM_DISPLAY_SIZE); i+=MEM_DISPLAY_SIZE)
   {
-    #ifdef DEBUG
-        Serial.print("memScreenPos ");
-        Serial.println(memScreenPos);
-    #endif 
     char buf[3] = {0};
     sprintf(buf, "%03d", mem[i/MEM_DISPLAY_SIZE]);
     lcd.print(buf);
     lcd.print(F(" "));
   }
 
-  lcd.setCursor(0,1);
-
-  for (short i = memScreenPos; i <= memScreenPos + (4*MEM_DISPLAY_SIZE); i+=MEM_DISPLAY_SIZE)
+  for (short i = 0; i <= 4; i++)
   {
-    if (i/MEM_DISPLAY_SIZE == memPos)
+    lcd.setCursor(i * MEM_DISPLAY_SIZE, 1);
+
+    short curMemPos = i + (memScreenPos / MEM_DISPLAY_SIZE);
+    if (curMemPos == memPos)
     {
       lcd.print(F(" ^  "));
+    }
+    else
+    {
+      char buf[3] = {0};
+      sprintf(buf, "%03d", curMemPos);
+      lcd.print(buf);
+      lcd.print(F(" "));
     }
   }
 
@@ -452,14 +605,14 @@ byte processDebugMemory(char mem[], short memPos, short pc, char output[])
             debugScreen--;
             if (debugScreen < DEBUG_MEMORY)
             {
-              debugScreen = DEBUG_IO;
+              debugScreen = DEBUG_OUTPUT;
             }
             break;
           }
           case btnDOWN:
           {
             debugScreen++;
-            if (debugScreen > DEBUG_IO)
+            if (debugScreen > DEBUG_OUTPUT)
             {
               debugScreen = DEBUG_MEMORY;
             }
@@ -515,8 +668,10 @@ void processLoad()
 byte readByteFromKeyboard()
 {
   byte result = 0;
-
   byte isInput = true;
+
+  lcd.clear();
+
   while(isInput)
   {
     lcd.setCursor(0, 0);
@@ -556,6 +711,8 @@ byte readByteFromKeyboard()
         }
     }
   }
+
+  lcd.clear();
   return result;
 }
 
