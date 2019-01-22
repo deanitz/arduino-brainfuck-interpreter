@@ -416,7 +416,7 @@ byte processDebugCode(char mem[], short memPos, short pc, char output[], byte ou
   #endif 
   for (short i = prgScreenPos; i <= prgScreenPos + 16; i++)
   {
-    lcd.print(prg[prgScreenPos + i]);
+    lcd.print(prg[i]);
   }
 
   lcd.setCursor(0,1);
