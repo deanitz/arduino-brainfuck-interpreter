@@ -257,6 +257,10 @@ int getCommandIndex(char symbol, char defaultIndex)
 
 void processExecution()
 {
+  memScreenPos = 0;
+  prgScreenPos = 0;
+  debugScreen  = 0;
+
   char mem[MEM_SIZE] = {0};     //init memory array
   short stack[STACK_SIZE] = {0};//init stack array
   pc = 0;                       //program position to start
@@ -410,10 +414,6 @@ byte processDebugCode(char mem[], short memPos, short pc, char output[], byte ou
 {
   lcd.setCursor(0,0);
 
-  #ifdef DEBUG
-      Serial.print(F("prgScreenPos"));
-      Serial.println(prgScreenPos);
-  #endif 
   for (short i = prgScreenPos; i <= prgScreenPos + 16; i++)
   {
     lcd.print(prg[i]);
