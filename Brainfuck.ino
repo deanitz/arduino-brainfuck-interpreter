@@ -56,7 +56,7 @@ byte symbolNone[8] = {
   B00000,
 };
 
-const char* menuItems[5] = {"1. Edit", "2. Execute", "3. Step Execute", "4. Save", "5. Load"};
+const char* menuItems[5] = {"Edit", "Execute", "Step Execute", "Save", "Load"};
 
 const char ops[] = {'\0', '>', '<', '+', '-', '.', ',', '[', ']'};
 
